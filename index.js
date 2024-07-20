@@ -1,49 +1,66 @@
 const express = require('express');
-const morgan = require('morgan');
-const path = require('path');
-
 const app = express();
+const bodyParser = require('body-parser');
 
-app.use(morgan('common'));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(bodyParser.json());
 
-// Dummy data for top 10 movies
-const topMovies = [
-    { title: "Movie 1", year: 2001 },
-    { title: "Movie 2", year: 2002 },
-    { title: "Movie 3", year: 2003 },
-    { title: "Movie 4", year: 2004 },
-    { title: "Movie 5", year: 2005 },
-    { title: "Movie 6", year: 2006 },
-    { title: "Movie 7", year: 2007 },
-    { title: "Movie 8", year: 2008 },
-    { title: "Movie 9", year: 2009 },
-    { title: "Movie 10", year: 2010 }
+let movies = [
+    { title: "Inception", description: "A mind-bending thriller", genre: "Thriller", director: "Christopher Nolan", imageUrl: "url1", featured: true },
+    { title: "The Matrix", description: "A sci-fi classic", genre: "Sci-Fi", director: "Lana Wachowski", imageUrl: "url2", featured: true },
 ];
 
-
-// Error-handling middleware
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).send('Something broke!');
-});
-
-// GET route for /movies
 app.get('/movies', (req, res) => {
-    res.json(topMovies);
+    res.json(movies);
 });
 
-// GET route for /
-app.get('/', (req, res) => {
-    res.send('Welcome to my movie API!');
+app.get('/movies/:title', (req, res) => {
+    const movie = movies.find(m => m.title === req.params.title);
+    if (movie) {
+        res.json(movie);
+    } else {
+        res.status(404).send('Movie not found');
+    }
 });
 
-// Start the server
-const port = process.env.PORT || 3000;
+app.get('/genres/:name', (req, res) => {
+    // Mock genre data for demonstration
+    if (req.params.name === 'Thriller') {
+        res.json({ name: 'Thriller', description: 'A genre characterized by excitement and suspense' });
+    } else {
+        res.status(404).send('Genre not found');
+    }
+});
+
+app.get('/directors/:name', (req, res) => {
+    // Mock director data for demonstration
+    if (req.params.name === 'Christopher Nolan') {
+        res.json({ name: 'Christopher Nolan', bio: 'A British-American film director, producer, and screenwriter', birthYear: 1970, deathYear: null });
+    } else {
+        res.status(404).send('Director not found');
+    }
+});
+
+app.post('/users', (req, res) => {
+    res.json({ message: 'User registration successful' });
+});
+
+app.put('/users/:username', (req, res) => {
+    res.json({ message: `User info updated for ${req.params.username}` });
+});
+
+app.post('/users/:username/movies/:movieID', (req, res) => {
+    res.json({ message: `Movie ${req.params.movieID} added to ${req.params.username}'s favorites` });
+});
+
+app.delete('/users/:username/movies/:movieID', (req, res) => {
+    res.json({ message: `Movie ${req.params.movieID} removed from ${req.params.username}'s favorites` });
+});
+
+app.delete('/users/:username', (req, res) => {
+    res.json({ message: `User ${req.params.username} deregistered` });
+});
+
+const port = 8080;
 app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
-});
-
-app.get('/error', (req, res) => {
-    throw new Error('This is a forced error.');
+    console.log(`Server is running on port ${port}`);
 });
