@@ -21,13 +21,6 @@ const topMovies = [
     { title: "Movie 10", year: 2010 }
 ];
 
-
-// Error-handling middleware
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).send('Something broke!');
-});
-
 // GET route for /movies
 app.get('/movies', (req, res) => {
     res.json(topMovies);
@@ -38,12 +31,20 @@ app.get('/', (req, res) => {
     res.send('Welcome to my movie API!');
 });
 
+app.get('/error', (req, res) => {
+    throw new Error('This is a forced error.');
+});
+
+// Error-handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send('Something broke!');
+});
+
 // Start the server
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
 });
 
-app.get('/error', (req, res) => {
-    throw new Error('This is a forced error.');
-});
+
