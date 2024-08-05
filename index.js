@@ -4,24 +4,82 @@ const morgan = require('morgan');
 const path = require('path');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
-const passport = require('passport');
-const { Movie, User } = require('./models');
-require('./passport'); // Ensure passport configuration is required
+const cors = require('cors');  // Import CORS
+const passport = require('./passport'); // Import your passport configuration
+const auth = require('./auth'); // Ensure this points to your auth.js file
+const { body, validationResult } = require('express-validator'); // Import express-validator
 
 const app = express();
 
 app.use(morgan('common'));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.json());
+app.use(cors());  // Use CORS middleware
 
 // Connect to MongoDB
-mongoose.connect('mongodb://localhost:27017/movieAPI', { useNewUrlParser: true, useUnifiedTopology: true });
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/movieAPI', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+});
+
+// Require your auth file
+auth(app);
 
 // Middleware to require authentication
 const requireAuth = passport.authenticate('jwt', { session: false });
 
-// Allow new users to register (no authentication required)
-app.post('/users', (req, res) => {
+// Models
+const { Movie } = require('./models');
+const bcrypt = require('bcryptjs');
+
+// Define the User schema with password hashing
+const userSchema = new mongoose.Schema({
+    username: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    email: { type: String, required: true },
+    birthday: { type: Date, required: true },
+    favoriteMovies: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Movie' }]
+});
+
+// Hash password before saving
+userSchema.pre('save', function (next) {
+    if (!this.isModified('password')) return next();
+    bcrypt.hash(this.password, 10, (err, hash) => {
+        if (err) return next(err);
+        this.password = hash;
+        next();
+    });
+});
+
+// Compare password method
+userSchema.methods.comparePassword = function (candidatePassword, cb) {
+    bcrypt.compare(candidatePassword, this.password, (err, isMatch) => {
+        if (err) return cb(err);
+        cb(null, isMatch);
+    });
+};
+
+const User = mongoose.model('User', userSchema);
+
+// Validation for user registration and update
+const userValidationRules = [
+    body('username').isLength({ min: 5 }).withMessage('Username must be at least 5 characters long'),
+    body('password').isLength({ min: 5 }).withMessage('Password must be at least 5 characters long'),
+    body('email').isEmail().withMessage('Email is not valid'),
+    body('birthday').isDate().withMessage('Birthday must be a valid date')
+];
+
+// Middleware to handle validation errors
+const validate = (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(422).json({ errors: errors.array() });
+    }
+    next();
+};
+
+// Register new users with validation
+app.post('/users', userValidationRules, validate, (req, res) => {
     console.log('Registering new user');
     User.create({
         username: req.body.username,
@@ -29,15 +87,35 @@ app.post('/users', (req, res) => {
         email: req.body.email,
         birthday: req.body.birthday
     })
-    .then(user => res.status(201).json(user))
-    .catch(err => {
-        console.error(err);
-        res.status(500).send('Error: ' + err);
-    });
+        .then(user => res.status(201).json(user))
+        .catch(err => {
+            console.error(err);
+            res.status(500).send('Error: ' + err);
+        });
 });
 
 // Authentication route
 require('./auth')(app);
+
+// Update user with validation
+app.put('/users/:username', requireAuth, userValidationRules, validate, (req, res) => {
+    console.log(`Updating user with username: ${req.params.username}`);
+    User.findOneAndUpdate({ username: req.params.username }, {
+        $set: {
+            username: req.body.username,
+            password: req.body.password,
+            email: req.body.email,
+            birthday: req.body.birthday
+        }
+    }, { new: true })
+        .then(user => res.json(user))
+        .catch(err => {
+            console.error(err);
+            res.status(500).send('Error: ' + err);
+        });
+});
+
+// Other protected routes...
 
 app.get('/movies', requireAuth, (req, res) => {
     console.log('Fetching all movies');
@@ -185,7 +263,7 @@ app.delete('/users/:username', requireAuth, (req, res) => {
         });
 });
 
-const port = 8080;
+const port = process.env.PORT || 8080;
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
